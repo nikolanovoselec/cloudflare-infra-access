@@ -1,11 +1,17 @@
 # Cloudflare Infrastructure Access alpha reproducer
 
-This repository reproduces the Workers VPC Gateway Identity alpha upload, then can optionally test the native TCP path from a Container Durable Object. It does not change or deploy Codeflare.
+This repository reproduces the Workers VPC Gateway Identity alpha upload. It also has an optional, unattended Container TCP probe. It does not change or deploy Codeflare.
+
+## Intended SSH experience
+
+With Cloudflare One connected and the hostname route and Access policy already configured, the user runs `ssh -p 22 abc` (or just `ssh abc` for port 22). They do not enter Cloudflare target, network, application, or policy IDs, or type their WARP identity into the app. Cloudflare evaluates the connection against the configured routing and policy.
+
+For a hosted container, the alpha example gets the signed-in user's email from verified Access claims and passes it to `newFetcher(email)` on the Worker side. That is not a user input. This repository has not verified the full hostname-based SSH flow from a container; its automated TCP probe checks only a greeting at one fixed IP.
 
 ## Run the diagnostic
 
 1. In **Settings → Secrets and variables → Actions**, set **`CLOUDFLARE_ACCOUNT_ID`** to the 32-character hexadecimal test account ID and **`CLOUDFLARE_API_TOKEN`** to a dedicated, short-lived token restricted to that account. Do not paste the token into an issue, commit, or chat. The managed session credential from the original attempt is not portable to GitHub Actions.
-2. In **Actions → Test VPC Identity Alpha Upload and Container TCP**, select **Run workflow** on `main`. Choose `upload` first. Once upload succeeds, configure the runtime secret below, then choose `runtime` only on the approved test account, with the authorized user's Cloudflare One client connected. Pushes run mocked tests only; each manual run attempts at most one multipart upload.
+2. In **Actions → Test VPC Identity Alpha Upload and Container TCP**, select **Run workflow** on `main`. Choose `upload` first. The `runtime` option is a maintainer-only CI check, not the user SSH flow. Run it only after upload succeeds and only with the approved test fixture configured. Pushes run mocked tests only; each manual run attempts at most one multipart upload.
 3. Open **diagnose → Run selected Cloudflare diagnostic**. The log shows each stage, HTTP status, Cloudflare error code and allowlisted message (including `10015`), CF Ray and timestamp. Runtime results and cleanup proof are reported separately. Share the run link or the `cloudflare-alpha-evidence` artifact. Neither includes the account ID or token. Check cleanup status if the job fails or is interrupted; the run records the generated resource names. Revoke the dedicated token after diagnosis.
 
 | Mode | What it does | Account-level token permissions |
@@ -15,24 +21,9 @@ This repository reproduces the Workers VPC Gateway Identity alpha upload, then c
 
 Scope the token to the test account only. These are permissions for the workflow's documented API calls, not a verified minimum for the alpha binding. Ask Cloudflare whether the upload requires an additional VPC or Containers grant or account enablement. Keep write access restricted to people trusted to modify workflows using the deployment token. The repository owner can dispatch the run and give engineers read access to the result.
 
-## Runtime configuration
+## Optional CI fixture (maintainers only)
 
-`upload` does not need a user identity or private target. For `runtime` only, set `CLOUDFLARE_RUNTIME_CONFIG` as an Actions secret containing this JSON structure, using your own approved values:
-
-```json
-{
-  "identity": "tester@example.invalid",
-  "ip": "192.168.250.10",
-  "target_id": "<Infrastructure target ID>",
-  "network_id": "<virtual network ID>",
-  "access_app_id": "<Access application ID>",
-  "policy_id": "<Access policy ID>",
-  "target_name": "<Infrastructure target name>",
-  "ssh_username": "<approved SSH username>"
-}
-```
-
-Use a private IPv4 SSH target on port 22 and an existing policy matching the identity, username, and device posture requirement. These values are not accepted as workflow inputs or published in diagnostics. The runner does not create or modify policy.
+GitHub Actions has no signed-in Cloudflare One user from whom it can derive an identity. For the optional `runtime` check, the maintainer provisions `CLOUDFLARE_RUNTIME_CONFIG` with an approved fixed identity, private IP and existing target/policy references. The runner checks that the fixture still matches before it sends traffic. This secret is not needed for `upload` or for ordinary SSH over Cloudflare One. The runner does not create or modify policy.
 
 ## Deployment credential and scopes
 
