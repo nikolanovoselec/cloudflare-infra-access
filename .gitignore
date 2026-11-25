@@ -1,0 +1,8 @@
+/cf-ia-do-*/
+/.env*
+/.dev.vars*
+/.wrangler/
+/__pycache__/
+/node_modules/
+/*.secret*
+/*.log

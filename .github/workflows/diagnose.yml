@@ -1,0 +1,116 @@
+name: Test VPC Identity Alpha Upload and Container TCP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Test upload only, or also run the approved fixed-target TCP probe'
+        type: choice
+        options: [upload, runtime]
+        default: upload
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Validate fixture and test mocked behavior
+        run: |
+          node --check worker.mjs
+          node --check greeting.mjs
+          node --test probe.test.mjs
+          python3 -m unittest test_upload_only
+
+  diagnose:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: cloudflare-alpha-diagnostic
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run selected Cloudflare diagnostic
+        env:
+          DIAGNOSTIC_MODE: ${{ inputs.mode }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_RUNTIME_CONFIG: ${{ inputs.mode == 'runtime' && secrets.CLOUDFLARE_RUNTIME_CONFIG || '' }}
+        run: |
+          case "${CLOUDFLARE_API_TOKEN:-}" in
+            ''|CF_TOKEN|codeflare-oauth|codeflare-enterprise)
+              echo '::error::Set the CLOUDFLARE_API_TOKEN repository secret to a dedicated Cloudflare token. Managed session placeholders do not work on GitHub.'
+              exit 1
+              ;;
+          esac
+          case "$DIAGNOSTIC_MODE" in
+            upload) mode=--authorized-upload-only ;;
+            runtime) mode=--authorized-runtime-probe ;;
+            *) echo '::error::Select upload or runtime.'; exit 1 ;;
+          esac
+          attempt_dir="$(python3 run_once.py "$mode")"
+          python3 - "$attempt_dir" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          state = json.loads((root / 'summary.safe.json').read_text())
+          print(f"{state['mode']} result: {state['result']}")
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              print('### Alpha deployment admission', file=out)
+              print(state['result'], file=out)
+              print('\n| Stage | HTTP status | API errors | CF Ray | UTC response |\n|---|---|---|---|---|', file=out)
+              events = root / 'http.safe.jsonl'
+              for line in (events.read_text().splitlines() if events.is_file() else []):
+                  entry = json.loads(line)
+                  errors = entry.get('errors', [])
+                  codes = ', '.join(str(e['code']) for e in errors) or '—'
+                  ray = entry['cf_ray'] or '—'
+                  date = entry['http_date'] or entry['ended_at']
+                  print(f"| {entry['stage']} | {entry['status']} | {codes} | {ray} | {date} |", file=out)
+                  status = f"HTTP {entry['status']}" if entry['status'] else f"no HTTP response (curl exit {entry['curl_exit']})"
+                  print(f"{entry['stage']}: {status}; API errors: {codes}; CF Ray: {ray}; response time: {date}")
+                  for error in errors:
+                      if 'message' in error:  # The uploader retains only allowlisted provider messages.
+                          print(f"  Cloudflare {error['code']}: {error['message']}")
+              worker_absent = state.get('worker_absent_after') is True
+              cleanup = f'Cleanup: Worker absence verified = {worker_absent}.'
+              passed = state.get('upload_admitted') is True and state.get('endpoints_disabled') is True and worker_absent
+              if state['mode'] == 'runtime':
+                  runtime = 'Runtime: ' + (json.dumps(state['runtime']) if state.get('runtime') else 'not reached or no usable response')
+                  print(runtime)
+                  print(f'\n{runtime}', file=out)
+                  if state.get('app_create_calls'):
+                      cleanup += f" Container app absence verified = {state.get('app_absent_after') is True}."
+                  passed = passed and state.get('runtime_passed') is True and state.get('app_absent_after') is True
+              print(cleanup)
+              print(f'\n{cleanup}', file=out)
+          if not passed:
+              sys.exit('Selected diagnostic did not pass; see the job log and redacted evidence.')
+          PY
+      - name: Retain only redacted evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cloudflare-alpha-evidence
+          path: |
+            cf-ia-do-*/summary.safe.json
+            cf-ia-do-*/http.safe.jsonl
+            cf-ia-do-*/metadata.safe.json
+          if-no-files-found: ignore
+          retention-days: 7
