@@ -1,5 +1,12 @@
 # Cloudflare Infrastructure Access alpha reproducer
 
+> [!IMPORTANT]
+> **Worker upload blocked: HTTP 401 / Cloudflare error `10015`**
+>
+> You do not have access to use Workers VPC Gateway Identity. Please ensure it is enabled. If you are an Enterprise user, reach out to your account team.
+>
+> [Latest failed upload and logs](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) · CF Ray `a60047ca7ee1b9e3-IAD`
+
 This repository reproduces the Workers VPC Gateway Identity alpha upload. It also has an optional, unattended Container TCP probe. It does not change or deploy Codeflare.
 
 ## Intended SSH experience
@@ -45,8 +52,6 @@ The earlier standalone attempt used a managed OAuth credential. Its effective gr
 | [GitHub Actions, public upload-only run](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) | 11:23:17 | HTTP 401 / API error 10015 | `a60047ca7ee1b9e3-IAD` |
 | GitHub Actions, earlier upload-only run | 11:03:20 | HTTP 401 / API error 10015 | `a6002a8dbb892d0a-IAD` |
 | Standalone Container DO upload | 10:37:06 | HTTP 401 / API error 10015 | `a6000425fac4323a-ATH` |
-
-> You do not have access to use Workers VPC Gateway Identity. Please ensure it is enabled. If you are an Enterprise user, reach out to your account team.
 
 All attempts stopped at upload. The latest GitHub run verified the Worker was absent both before and after the request (HTTP 404 / API error 10007). No Container app was created, no endpoint was enabled and no runtime traffic was sent. Can Cloudflare confirm alpha admission for the target account and identify any missing token permission or upload field? The timestamp and CF Ray above are sufficient to look up the rejected request.
 
