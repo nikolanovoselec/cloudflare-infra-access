@@ -14,12 +14,12 @@ For a hosted container, the alpha example gets the signed-in user's email from v
 2. In **Actions → Test VPC Identity Alpha Upload and Container TCP**, select **Run workflow** on `main`. Choose `upload` first. The `runtime` option is a maintainer-only CI check, not the user SSH flow. Run it only after upload succeeds and only with the approved test fixture configured. Pushes run mocked tests only; each manual run attempts at most one multipart upload.
 3. Open **diagnose → Run selected Cloudflare diagnostic**. The log shows each stage, HTTP status, Cloudflare error code and allowlisted message (including `10015`), CF Ray and timestamp. Runtime results and cleanup proof are reported separately. Share the run link or the `cloudflare-alpha-evidence` artifact. Neither includes the account ID or token. Check cleanup status if the job fails or is interrupted; the run records the generated resource names. Revoke the dedicated token after diagnosis.
 
-| Mode | What it does | Documented permissions for the API calls (not the tested token's grants) |
-|---|---|---|
-| `upload` (default) | Uploads the Worker with the alpha binding and Container DO declaration, without enabling a URL, creating a Container app, or calling Zero Trust. Verifies URL state and retires the Worker after the test. | **Workers Scripts → Edit** for the Workers API calls. The SQLite DO migration is part of the upload; no separate DO grant is documented for that call. |
-| `runtime` | Checks the existing fixed Infrastructure target, app and policy. If the fresh upload is admitted, associates one temporary Container app, enables a short-lived protected endpoint, runs one bounded TCP probe, and verifies retirement of both resources. | **Workers Scripts → Edit**, **Containers → Edit**, **Zero Trust → Read**, **Access: Apps and Policies → Read**. No policy or routing writes. |
+| Mode | What it does |
+|---|---|
+| `upload` (default) | Uploads the Worker with the alpha binding and Container DO declaration, without enabling a URL, creating a Container app, or calling Zero Trust. Verifies URL state and retires the Worker after the test. |
+| `runtime` | Checks the existing fixed Infrastructure target, app and policy. If the fresh upload is admitted, associates one temporary Container app, enables a short-lived protected endpoint, runs one bounded TCP probe, and verifies retirement of both resources. No policy or routing writes. |
 
-Scope the token to the test account only. These are permissions for the workflow's documented API calls, not a verified minimum for the alpha binding. Ask Cloudflare whether the upload requires an additional VPC or Containers grant or account enablement. Keep write access restricted to people trusted to modify workflows using the deployment token. The repository owner can dispatch the run and give engineers read access to the result.
+Scope the token to the test account only. Keep write access restricted to people trusted to modify workflows using the deployment token. The repository owner can dispatch the run and share the result.
 
 ## Optional CI fixture (maintainers only)
 
@@ -27,7 +27,16 @@ GitHub Actions has no signed-in Cloudflare One user from whom it can derive an i
 
 ## Permissions actually granted to the tested API token
 
-**Exact grants: not verified.** The [latest public upload run](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) used the dedicated token stored in `CLOUDFLARE_API_TOKEN`. GitHub's secret settings do not show its Cloudflare permissions. Record the permission names and levels from the Cloudflare token settings here once confirmed, never the token value or account ID. The table above lists the permissions documented for the workflow's API calls, not the grants on that token.
+| Cloudflare account permission | Level documented for the workflow | Mode | Granted to the tested token? |
+|---|---|---|---|
+| Workers Scripts | Edit | `upload`, `runtime` | Not verified |
+| Containers | Edit | `runtime` (app creation and cleanup) | Not verified |
+| Zero Trust | Read | `runtime` (target lookup) | Not verified |
+| Access: Apps and Policies | Read | `runtime` (app and policy lookup) | Not verified |
+| Durable Objects | No separate grant documented for the SQLite migration in Worker upload | `upload`, `runtime` | Not verified |
+| VPC / Gateway Identity alpha | No additional grant confirmed for `cf1:network` + `runtime-email-alpha` | `upload`, `runtime` | Not verified |
+
+The [latest public upload run](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) used `CLOUDFLARE_API_TOKEN`. GitHub does not show the Cloudflare grants for that secret. The documented levels above describe the API calls the workflow makes, not a verified minimum for the alpha binding. Record only confirmed permission names and levels here, never the token value or account ID.
 
 The earlier standalone attempt used a managed OAuth credential. Its effective grants were not recorded either. Successful read requests do not establish write permission or alpha entitlement. A missing permission is plausible, but **10015 does not distinguish it from account-level alpha enablement or another admission prerequisite**.
 
