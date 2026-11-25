@@ -7,7 +7,7 @@
 >
 > [Latest failed upload and logs](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) · CF Ray `a60047ca7ee1b9e3-IAD`
 
-This repository reproduces the Workers VPC Gateway Identity alpha upload. It also has an optional, unattended Container TCP probe. It does not change or deploy Codeflare.
+This repository reproduces the Workers VPC Gateway Identity alpha upload. It also has an optional, unattended Container TCP probe.
 
 ## Intended SSH experience
 
