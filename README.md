@@ -25,16 +25,14 @@ Scope the token to the test account only. Keep write access restricted to people
 
 GitHub Actions has no signed-in Cloudflare One user from whom it can derive an identity. For the optional `runtime` check, the maintainer provisions `CLOUDFLARE_RUNTIME_CONFIG` with an approved fixed identity, private IP and existing target/policy references. The runner checks that the fixture still matches before it sends traffic. This secret is not needed for `upload` or for ordinary SSH over Cloudflare One. The runner does not create or modify policy.
 
-## Permissions actually granted to the tested API token
+## API token permissions
 
-| Cloudflare account permission | Level documented for the workflow | Mode | Granted to the tested token? |
-|---|---|---|---|
-| Workers Scripts | Edit | `upload`, `runtime` | Not verified |
-| Containers | Edit | `runtime` (app creation and cleanup) | Not verified |
-| Zero Trust | Read | `runtime` (target lookup) | Not verified |
-| Access: Apps and Policies | Read | `runtime` (app and policy lookup) | Not verified |
-| Durable Objects | No separate grant documented for the SQLite migration in Worker upload | `upload`, `runtime` | Not verified |
-| VPC / Gateway Identity alpha | No additional grant confirmed for `cf1:network` + `runtime-email-alpha` | `upload`, `runtime` | Not verified |
+| Cloudflare account permission | Level | Mode |
+|---|---|---|
+| Workers Scripts | Edit | `upload`, `runtime` |
+| Containers | Edit | `runtime` (app creation and cleanup) |
+| Zero Trust | Read | `runtime` (target lookup) |
+| Access: Apps and Policies | Read | `runtime` (app and policy lookup) |
 
 The [latest public upload run](https://github.com/nikolanovoselec/cloudflare-infra-access/actions/runs/45603902182) used `CLOUDFLARE_API_TOKEN`. GitHub does not show the Cloudflare grants for that secret. The documented levels above describe the API calls the workflow makes, not a verified minimum for the alpha binding. Record only confirmed permission names and levels here, never the token value or account ID.
 
